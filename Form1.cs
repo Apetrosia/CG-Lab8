@@ -964,7 +964,7 @@ namespace CG_Lab
                 Faces = new List<Face>()       // Фильтруем грани
             };
 
-            // Корректируем нормали (добавьте этот метод из предыдущего ответа)
+            // Корректируем нормали 
             AdjustNormals(this);
             
             foreach (var face in this.Faces)
