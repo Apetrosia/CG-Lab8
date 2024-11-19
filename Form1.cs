@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.IO;
 using System.Windows.Forms;
+using System.Security.Cryptography;
 
 namespace CG_Lab
 {
@@ -33,6 +34,8 @@ namespace CG_Lab
         Camera camera;
 
         private Timer actionTimer;
+
+        Vertex viewDirection = new Vertex(0, 0, -1);
 
         public Form1()
         {
@@ -188,6 +191,7 @@ namespace CG_Lab
         {
             float scaleFactor = (float)numericScale.Value;
             //g.Clear(pictureBox1.BackColor);
+            //polyhedron = polyhedron.FilterVisibleFaces(viewDirection);
 
             pictureBox1.Image = clearPB;
 
@@ -652,6 +656,21 @@ namespace CG_Lab
         {
             e.SuppressKeyPress = true;
         }
+
+        private void button4_Click(object sender, EventArgs e)
+        {
+
+            //viewDirection = new Vertex(0, 0, 1); // Ортографическая проекция
+            //var cameraPosition = new Vertex(0, 0, -1);
+            viewDirection.X = (float)numericUpDownX.Value;
+            viewDirection.Y = (float)numericUpDownY.Value;
+            viewDirection.Z = (float)numericUpDownZ.Value;
+
+            // Получаем нормализованный вектор обзора
+            //viewDirection = CalculateViewVector(cameraPosition);
+            DrawPolyhedron(currentPolyhedron.FilterVisibleFaces(viewDirection), currPlane);
+
+        }
     }
 
     public class Camera
@@ -854,11 +873,11 @@ namespace CG_Lab
 
     public struct Vertex
     {
-        public float X { get; private set; }
+        public float X { get; set; }
 
-        public float Y { get; private set; }
+        public float Y { get; set; }
 
-        public float Z { get; private set; }
+        public float Z { get; set; }
 
         public Vertex(float x, float y, float z)
         {
@@ -866,7 +885,54 @@ namespace CG_Lab
             Y = y;
             Z = z;
         }
-        
+
+        // Находим центр грани
+        public static Vertex GetFaceCentroid(Face face, List<Vertex> vertices)
+        {
+            float x = 0, y = 0, z = 0;
+            foreach (var index in face.Vertices)
+            {
+                x += vertices[index].X;
+                y += vertices[index].Y;
+                z += vertices[index].Z;
+            }
+            int count = face.Vertices.Count();
+            return new Vertex(x / count, y / count, z / count);
+        }
+
+        // Находим центр многогранника
+        public static Vertex GetPolyhedronCenter(PolyHedron polyhedron)
+        {
+            float x = 0, y = 0, z = 0;
+            foreach (var face in polyhedron.Faces)
+            {
+                var centroid = GetFaceCentroid(face, polyhedron.Vertices);
+                x += centroid.X;
+                y += centroid.Y;
+                z += centroid.Z;
+            }
+            int count = polyhedron.Faces.Count;
+            return new Vertex(x / count, y / count, z / count);
+        }
+        public static Vertex GetFaceNormal(Face face, List<Vertex> vertices)
+        {
+            // Три вершины грани
+            var v1 = vertices[face.Vertices[0]];
+            var v2 = vertices[face.Vertices[1]];
+            var v3 = vertices[face.Vertices[2]];
+
+            // Векторы AB и BC
+            var ab = new Vertex(v2.X - v1.X, v2.Y - v1.Y, v2.Z - v1.Z);
+            var bc = new Vertex(v3.X - v2.X, v3.Y - v2.Y, v3.Z - v2.Z);
+
+            // Векторное произведение AB x BC
+            var nx = ab.Y * bc.Z - ab.Z * bc.Y;
+            var ny = ab.Z * bc.X - ab.X * bc.Z;
+            var nz = ab.X * bc.Y - ab.Y * bc.X;
+
+            return new Vertex(nx, ny, nz);
+        }
+
         public Vertex Clone()
         {
             return new Vertex(X, Y, Z);
@@ -1018,9 +1084,16 @@ namespace CG_Lab
     {
         public int[] Vertices { get; private set; }
 
+        public Vertex Normal { get; set; }
+
         public Face(params int[] vertices)
         {
             Vertices = vertices;
+        }
+
+        public void SetNormal(Vertex normal)
+        {
+            Normal = normal;
         }
     }
 
@@ -1044,6 +1117,77 @@ namespace CG_Lab
             Faces = faces;
             Vertices = vertices;
             Normals = normals;
+        }
+
+        public static void AdjustNormals(PolyHedron polyhedron)
+        {
+            var center = Vertex.GetPolyhedronCenter(polyhedron);
+            foreach (var face in polyhedron.Faces)
+            {
+                var faceCentroid = Vertex.GetFaceCentroid(face, polyhedron.Vertices);
+                var normal = Vertex.GetFaceNormal(face, polyhedron.Vertices);
+
+                // Вектор от центра многогранника к центру грани
+                var toFace = new Vertex(
+                    faceCentroid.X - center.X,
+                    faceCentroid.Y - center.Y,
+                    faceCentroid.Z - center.Z
+                );
+
+                // Скалярное произведение нормали и toFace
+                float dotProduct = Vertex.Dot(normal, toFace);
+
+                // Если нормаль направлена внутрь, инвертируем её
+                if (dotProduct < 0)
+                {
+                    normal = new Vertex(-normal.X, -normal.Y, -normal.Z);
+                }
+
+                // Сохраняем нормаль
+                face.Normal = normal;
+            }
+        }
+        public Vertex CalculateViewVector(Face face, PolyHedron polyhedron, Vertex cameraPosition)
+        {
+            // Найти центр грани
+            Vertex faceCenter = Vertex.GetFaceCentroid(face, polyhedron.Vertices);
+
+            // Рассчитать вектор обзора
+            Vertex viewVector = new Vertex(
+                cameraPosition.X - faceCenter.X,
+                cameraPosition.Y - faceCenter.Y,
+                cameraPosition.Z - faceCenter.Z
+            );
+
+            return viewVector;
+        }
+        public PolyHedron FilterVisibleFaces(Vertex viewDirection)
+        {
+            // Создаем новый многогранник
+            var visiblePolyhedron = new PolyHedron
+            {
+                Vertices = this.Vertices, // Используем те же вершины
+                Faces = new List<Face>()       // Фильтруем грани
+            };
+
+            // Корректируем нормали (добавьте этот метод из предыдущего ответа)
+            AdjustNormals(this);
+
+            foreach (var face in this.Faces)
+            {
+                var normal = face.Normal;
+                //viewDirection = CalculateViewVector(face, visiblePolyhedron, new Vertex(0, 0, -500));
+                // Скалярное произведение нормали и вектора обзора
+                float dotProduct = Vertex.Dot(normal, viewDirection);
+
+                // Если грань видима, добавляем её в новый многогранник
+                if (dotProduct > 0)
+                {
+                    visiblePolyhedron.Faces.Add(face);
+                }
+            }
+
+            return visiblePolyhedron;
         }
 
         public void FindCenter(List<Vertex> vertices, ref double a, ref double b, ref double c)
@@ -1326,6 +1470,35 @@ namespace CG_Lab
             CalculateNormals(polyhedron);
 
             return polyhedron;
+        }
+
+        public PolyHedron GetVisiblePolyhedron(Vertex viewDirection)
+        {
+            List<Face> visibleFaces = new List<Face>();
+
+            foreach (var face in Faces)
+            {
+                if (face.Vertices.Length < 3) continue;
+
+                // Нормаль грани
+                var normal = face.Normal;
+
+                // Первая вершина грани
+                var v1 = Vertices[face.Vertices[0]];
+                var directionToViewer = Vertex.Subtract(viewDirection, v1);
+
+                // Скалярное произведение нормали и вектора к наблюдателю
+                float dotProduct = Vertex.Dot(normal, directionToViewer);
+
+                // Если скалярное произведение < 0, грань видима
+                if (dotProduct < 0)
+                {
+                    visibleFaces.Add(face);
+                }
+            }
+
+            // Создаем новый PolyHedron с видимыми гранями
+            return new PolyHedron(visibleFaces, Vertices, Normals);
         }
 
         private static Matrix<float> GetRotationMatrix(char axis, float angleDegrees)
