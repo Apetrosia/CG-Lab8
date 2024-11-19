@@ -7,6 +7,7 @@ using System.Text;
 using System.IO;
 using System.Windows.Forms;
 using System.Security.Cryptography;
+using System.Text.RegularExpressions;
 
 namespace CG_Lab
 {
@@ -87,38 +88,36 @@ namespace CG_Lab
 
             // Получаем View и Projection матрицы из камеры
             var viewMatrix = camera.ViewMatrix;
-            var projectionMatrix = camera.ProjectionMatrix;
+
+            var projectionMatrix = camera.OrthographicMatrix;
+            //var projectionMatrix = camera.ProjectionMatrix;
+
+            PolyHedron renderPoly = currentPolyhedron.Clone(); //currentPolyhedron.FilterVisibleFaces(camera.Direction);
 
             // Очистка экрана
             pictureBox1.Image = clearPB;
-            
-            foreach (var face in currentPolyhedron.Faces)
+
+            for (int i = 0; i < renderPoly.Vertices.Count; i++)
             {
-                List<PointF> projectedPoints = new List<PointF>();
+                // Преобразование в пространстве камеры
+                renderPoly.Vertices[i] *= viewMatrix;
+                renderPoly.Vertices[i] *= projectionMatrix;
 
-                // Перебор вершин грани
-                foreach (var vertex in face.Vertices)
-                {
-                    // Преобразование в пространстве камеры
-                    Vertex transformedVertex = currentPolyhedron.Vertices[vertex] * viewMatrix;
+                renderPoly.Vertices[i] = new Vertex((renderPoly.Vertices[i].X + 1) * pictureBox1.Width / 2,
+                    (1 - renderPoly.Vertices[i].Y) * pictureBox1.Height / 2,
+                    renderPoly.Vertices[i].Z);
+            }
 
-                    // Преобразование в экранные координаты
-                    transformedVertex *= projectionMatrix;
+            foreach (Face face in renderPoly.FilterVisibleFaces(camera.Direction).Faces)
+            {
+                // Z-буфер
 
-                    // Масштабирование для соответствия размеру экрана
-                    float x = (transformedVertex.X + 1) * pictureBox1.Width / 2;
-                    float y = (1 - transformedVertex.Y) * pictureBox1.Height / 2;
-
-                    projectedPoints.Add(new PointF(x, y));
-                }
-
-                // Отрисовка грани, если она видима
-                if (projectedPoints.Count >= 3)
-                {
-                    for (int i = 1; i < projectedPoints.Count; i++)
-                        DrawLineVu(pictureBox1, Color.Black, projectedPoints[i - 1], projectedPoints[i]);
-                    DrawLineVu(pictureBox1, Color.Black, projectedPoints[projectedPoints.Count - 1], projectedPoints[0]);
-                }
+                // Отрисовываем грани
+                for (int i = 1; i < face.Vertices.Count(); i++)
+                    DrawLineVu(pictureBox1, Color.Black, new PointF(renderPoly.Vertices[face.Vertices[i - 1]].X, renderPoly.Vertices[face.Vertices[i - 1]].Y),
+                        new PointF(renderPoly.Vertices[face.Vertices[i]].X, renderPoly.Vertices[face.Vertices[i]].Y));
+                DrawLineVu(pictureBox1, Color.Black, new PointF(renderPoly.Vertices[face.Vertices[face.Vertices.Count() - 1]].X, renderPoly.Vertices[face.Vertices[face.Vertices.Count() - 1]].Y),
+                        new PointF(renderPoly.Vertices[face.Vertices[0]].X, renderPoly.Vertices[face.Vertices[0]].Y));
             }
 
             pictureBox1.Invalidate();
@@ -450,6 +449,7 @@ namespace CG_Lab
         private void DrawProfile()
         {
             // Отображаем образующую на PictureBox
+            /*
             var g = pictureBox1.CreateGraphics();
             g.Clear(pictureBox1.BackColor);
 
@@ -457,6 +457,7 @@ namespace CG_Lab
             {
                 g.FillEllipse(Brushes.Red, point.X - 2 + pictureBox1.Width / 2, point.Y - 2 + pictureBox1.Height / 2, 4, 4);
             }
+            */
         }
 
 
@@ -487,12 +488,16 @@ namespace CG_Lab
 
                 case (int)AffineOp.Rotation:
                     anchor = new Vertex((float)numericUpDown4.Value, (float)numericUpDown5.Value, (float)numericUpDown6.Value);
-
-                    DrawPolyhedron(currentPolyhedron = currentPolyhedron
+                    currentPolyhedron = currentPolyhedron
+                                                       .Moved(-anchor.X, -anchor.Y, -anchor.Z)
+                                                       .Rotated((float)numericUpDown1.Value, (float)numericUpDown2.Value, (float)numericUpDown3.Value)
+                                                       .Moved(anchor.X, anchor.Y, anchor.Z);
+                    RenderScene();
+                    /*DrawPolyhedron(currentPolyhedron = currentPolyhedron
                                                        .Moved(-anchor.X, -anchor.Y, -anchor.Z)
                                                        .Rotated((float)numericUpDown1.Value, (float)numericUpDown2.Value, (float)numericUpDown3.Value)
                                                        .Moved(anchor.X, anchor.Y, anchor.Z),
-                                                       currPlane);
+                                                       currPlane);*/
                     break;
                 case (int)AffineOp.LineRotation:
                     anchor = new Vertex((float)numericUpDown4.Value, (float)numericUpDown5.Value, (float)numericUpDown6.Value);
@@ -512,36 +517,48 @@ namespace CG_Lab
                     centerY = 0;
                     centerZ = 0;
                     currentPolyhedron.FindCenter(currentPolyhedron.Vertices, ref centerX, ref centerY, ref centerZ);
-
-                    DrawPolyhedron(currentPolyhedron = currentPolyhedron
+                    currentPolyhedron = currentPolyhedron
+                                                       .Moved((float)-centerX, (float)-centerY, (float)-centerZ)
+                                                       .Rotated((float)numericUpDown1.Value, 0, 0)
+                                                       .Moved((float)centerX, (float)centerY, (float)centerZ);
+                    RenderScene();
+                    /*DrawPolyhedron(currentPolyhedron = currentPolyhedron
                                                        .Moved((float)-centerX, (float)-centerY, (float)-centerZ)
                                                        .Rotated((float)numericUpDown1.Value, 0, 0)
                                                        .Moved((float)centerX, (float)centerY, (float)centerZ),
-                                                       currPlane);
+                                                       currPlane);*/
                     break;
                 case (int)AffineOp.AxisYRotation:
                     centerX = 0;
                     centerY = 0;
                     centerZ = 0;
                     currentPolyhedron.FindCenter(currentPolyhedron.Vertices, ref centerX, ref centerY, ref centerZ);
-
-                    DrawPolyhedron(currentPolyhedron = currentPolyhedron
+                    currentPolyhedron = currentPolyhedron = currentPolyhedron
+                                                       .Moved((float)-centerX, (float)-centerY, (float)-centerZ)
+                                                       .Rotated(0, (float)numericUpDown2.Value, 0)
+                                                       .Moved((float)centerX, (float)centerY, (float)centerZ);
+                    RenderScene();
+                    /*DrawPolyhedron(currentPolyhedron = currentPolyhedron
                                                        .Moved((float)-centerX, (float)-centerY, (float)-centerZ)
                                                        .Rotated(0, (float)numericUpDown2.Value, 0)
                                                        .Moved((float)centerX, (float)centerY, (float)centerZ),
-                                                       currPlane);
+                                                       currPlane);*/
                     break;
                 case (int)AffineOp.AxisZRotation:
                     centerX = 0;
                     centerY = 0;
                     centerZ = 0;
                     currentPolyhedron.FindCenter(currentPolyhedron.Vertices, ref centerX, ref centerY, ref centerZ);
-
-                    DrawPolyhedron(currentPolyhedron = currentPolyhedron
+                    currentPolyhedron = currentPolyhedron
+                                                       .Moved((float)-centerX, (float)-centerY, (float)-centerZ)
+                                                       .Rotated(0, 0, (float)numericUpDown2.Value)
+                                                       .Moved((float)centerX, (float)centerY, (float)centerZ);
+                    RenderScene();
+                    /*DrawPolyhedron(currentPolyhedron = currentPolyhedron
                                                        .Moved((float)-centerX, (float)-centerY, (float)-centerZ)
                                                        .Rotated(0, 0, (float)numericUpDown2.Value)
                                                        .Moved((float)centerX, (float)centerY, (float)centerZ),
-                                                       currPlane);
+                                                       currPlane);*/
                     break;
             }
         }
@@ -549,7 +566,9 @@ namespace CG_Lab
         
         private void numericUpDown1_ValueChanged(object sender, EventArgs e)
         {
-            DrawPolyhedron(currentPolyhedron, currPlane);
+            currentPolyhedron = currentPolyhedron.ScaledAroundCenter((float)numericScale.Value, (float)numericScale.Value, (float)numericScale.Value);
+            RenderScene();
+            //DrawPolyhedron(currentPolyhedron, currPlane);
         }
 
         private void axisXNumeric_ValueChanged(object sender, EventArgs e)
@@ -639,7 +658,10 @@ namespace CG_Lab
             {
                 try
                 {
-                    DrawPolyhedron(currentPolyhedron = PolyHedron.LoadFromObj(openFileDialog1.FileName), currPlane);
+                    currentPolyhedron = PolyHedron.LoadFromObj(openFileDialog1.FileName);
+                    currentPolyhedron = currentPolyhedron.Moved(pictureBox1.Width / 2, pictureBox1.Height / 2, 0);
+                    RenderScene();
+                    //DrawPolyhedron(currentPolyhedron = PolyHedron.LoadFromObj(openFileDialog1.FileName), currPlane);
                         //.Scaled(100, 100, 100)
                         //.RotatedXAxis(180)
                         //.Moved(pictureBox1.Width / 2, pictureBox1.Height / 2, 0), currPlane);
@@ -678,14 +700,18 @@ namespace CG_Lab
         public Vertex Position { get; set; } // Позиция камеры
         public Vertex Target { get; set; }   // Точка, куда смотрит камера
         public Vertex Up { get; set; } = new Vertex(0, -1, 0); // Вектор вверх
+        public Vertex Direction { get; set; } = new Vertex(0, 0, 1); // Направление взгляда
         public Matrix<float> ViewMatrix => Utilities.CreateViewMatrix(Position, Target, Up);
         public Matrix<float> ProjectionMatrix { get; set; }
+        public Matrix<float> OrthographicMatrix { get; set; }
 
         public Camera(Vertex position, Vertex target, float fov, float aspectRatio, float near, float far)
         {
             Position = position;
             SetDirection(new Vertex(0, 0, 1));
+            OrthographicMatrix = Utilities.CreateOrthographicFov(fov, aspectRatio, near, far);
             ProjectionMatrix = Utilities.CreatePerspectiveFieldOfView(fov, aspectRatio, near, far);
+
         }
 
         public void SetDirection(Vertex direction)
@@ -693,6 +719,7 @@ namespace CG_Lab
             // float distance = (Target - Position).Length();
 
             Target = Position + direction; // Сместить цель взгляда по направлению
+            Direction = new Vertex(-direction.X, -direction.Y, direction.Z);
         }
     }
 
@@ -746,6 +773,31 @@ namespace CG_Lab
                 { 0, 0, (far * near) / (near - far), 0 }*/
             };
         }
+
+        public static Matrix<float> CreateOrthographicFov(float fov, float aspect, float near, float far)
+        {
+            if (fov <= 0 || fov >= Math.PI)
+                throw new ArgumentOutOfRangeException(nameof(fov), "fov must be between 0 and PI radians.");
+            if (near <= 0)
+                throw new ArgumentOutOfRangeException(nameof(near), "near must be positive.");
+            if (far <= near)
+                throw new ArgumentOutOfRangeException(nameof(far), "far must be greater than near.");
+
+            // Высота и ширина области проекции
+            float top = (float)Math.Tan(fov / 2) * near;
+            float bottom = -top;
+            float right = top * aspect;
+            float left = -right;
+
+            // Матрица ортографической проекции
+            return new float[4, 4] {
+                { 2.0f / (right - left), 0, 0, -(right + left) / (right - left) },
+                { 0, 2.0f / (top - bottom), 0, -(top + bottom) / (top - bottom) },
+                { 0, 0, -2.0f / (far - near), -(far + near) / (far - near) },
+                { 0, 0, 0, 1 }
+            };
+        }
+
     }
 
     public class Matrix<T> where T : struct, IConvertible
@@ -1099,11 +1151,11 @@ namespace CG_Lab
 
     public class PolyHedron
     {
-        public List<Face> Faces { get; private set; }
+        public List<Face> Faces { get; set; }
 
-        public List<Vertex> Vertices { get; private set; }
+        public List<Vertex> Vertices { get; set; }
 
-        public List<Normal> Normals { get; private set; }
+        public List<Normal> Normals { get; set; }
 
         public PolyHedron()
         {
@@ -1485,7 +1537,7 @@ namespace CG_Lab
 
                 // Первая вершина грани
                 var v1 = Vertices[face.Vertices[0]];
-                var directionToViewer = Vertex.Subtract(viewDirection, v1);
+                var directionToViewer = Vertex.Subtract( viewDirection,v1);
 
                 // Скалярное произведение нормали и вектора к наблюдателю
                 float dotProduct = Vertex.Dot(normal, directionToViewer);
