@@ -5,7 +5,7 @@ using System.Drawing;
 using System.Linq;
 using System.Text;
 using System.IO;
-using System.Threading;
+using System.Windows.Forms;
 
 namespace CG_Lab
 {
@@ -29,6 +29,11 @@ namespace CG_Lab
 
         PolyHedron currentPolyhedron;
         private List<Vertex> profilePoints = new List<Vertex>();
+
+        Camera camera;
+
+        private Timer actionTimer;
+
         public Form1()
         {
             InitializeComponent();
@@ -38,7 +43,16 @@ namespace CG_Lab
             g = Graphics.FromImage(pictureBox1.Image);
             clearPB = new Bitmap(pictureBox1.Image);
 
-            currentPolyhedron = PolyHedron.GetCube();
+            camera = new Camera(
+                                position:    new Vertex(pictureBox1.Width / 2, pictureBox1.Height / 2, -10f),
+                                target:      new Vertex(pictureBox1.Width / 2, pictureBox1.Height / 2, 0),
+                                fov:         (float)Math.PI / 3,
+                                aspectRatio: 1f, // (float)pictureBox1.Width / pictureBox1.Height,
+                                near:        0.1f,
+                                far:         100f
+                                );
+
+            currentPolyhedron = PolyHedron.GetCube().Moved(pictureBox1.Width / 2, pictureBox1.Height / 2, 0);
 
             reflectionComboBox.Items.Add("Отображение на XY");
             reflectionComboBox.Items.Add("Отображение на YZ");
@@ -46,12 +60,128 @@ namespace CG_Lab
 
             comboBox1.SelectedIndex = 0;
 
-            Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
+            System.Threading.Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
+
+            this.KeyPreview = true;
+            this.KeyDown += MainForm_KeyDown;
+            this.KeyUp += MyForm_KeyUp;
+
+            actionTimer = new Timer();
+            actionTimer.Interval = (int)(1000f / 60f); // 60 frames per second
+            actionTimer.Tick += ActionTimer_Tick;
+
+            RenderScene();
         }
 
-        private PointF ProjectParallel(Vertex v)
+        private void ActionTimer_Tick(object sender, EventArgs e)
         {
-            return new PointF(v.X, v.Y);
+            RenderScene();
+        }
+
+        private void RenderScene()
+        {
+            if (currentPolyhedron == null) return;
+
+            // Получаем View и Projection матрицы из камеры
+            var viewMatrix = camera.ViewMatrix;
+            var projectionMatrix = camera.ProjectionMatrix;
+
+            // Очистка экрана
+            pictureBox1.Image = clearPB;
+            
+            foreach (var face in currentPolyhedron.Faces)
+            {
+                List<PointF> projectedPoints = new List<PointF>();
+
+                // Перебор вершин грани
+                foreach (var vertex in face.Vertices)
+                {
+                    // Преобразование в пространстве камеры
+                    Vertex transformedVertex = currentPolyhedron.Vertices[vertex] * viewMatrix;
+
+                    // Преобразование в экранные координаты
+                    transformedVertex *= projectionMatrix;
+
+                    // Масштабирование для соответствия размеру экрана
+                    float x = (transformedVertex.X + 1) * pictureBox1.Width / 2;
+                    float y = (1 - transformedVertex.Y) * pictureBox1.Height / 2;
+
+                    projectedPoints.Add(new PointF(x, y));
+                }
+
+                // Отрисовка грани, если она видима
+                if (projectedPoints.Count >= 3)
+                {
+                    for (int i = 1; i < projectedPoints.Count; i++)
+                        DrawLineVu(pictureBox1, Color.Black, projectedPoints[i - 1], projectedPoints[i]);
+                    DrawLineVu(pictureBox1, Color.Black, projectedPoints[projectedPoints.Count - 1], projectedPoints[0]);
+                }
+            }
+
+            pictureBox1.Invalidate();
+        }
+
+
+        private void MainForm_KeyDown(object sender, KeyEventArgs e)
+        {
+            HandleCameraInput(e.KeyCode);
+        }
+
+        private float moveSpeed = 0.2f;
+        private float rotateSpeed = 0.03f;
+        private float horizontalAngle = (float)Math.PI / 2;
+        private float verticalAngle = 0f;
+
+        private void HandleCameraInput(Keys key)
+        {
+            Keys[] contolKeys = { Keys.W, Keys.A, Keys.S, Keys.D, Keys.Up, Keys.Down, Keys.Right, Keys.Left };
+
+            if (contolKeys.Contains(key))
+            {
+                switch (key)
+                {
+                    case Keys.W: // Вперед
+                        camera.Position += moveSpeed * (camera.Target - camera.Position).Normalize();
+                        break;
+                    case Keys.S: // Назад
+                        camera.Position -= moveSpeed * (camera.Target - camera.Position).Normalize();
+                        break;
+                    case Keys.A: // Влево
+                        camera.Position += moveSpeed * Vertex.Cross(camera.Up, camera.Target - camera.Position);
+                        break;
+                    case Keys.D: // Вправо
+                        camera.Position -= moveSpeed * Vertex.Cross(camera.Up, camera.Target - camera.Position);
+                        break;
+                    case Keys.Up: // Поворот вверх
+                        verticalAngle += rotateSpeed;
+                        break;
+                    case Keys.Down: // Поворот вниз
+                        verticalAngle -= rotateSpeed;
+                        break;
+                    case Keys.Left: // Поворот влево
+                        horizontalAngle += rotateSpeed;
+                        break;
+                    case Keys.Right: // Поворот вправо
+                        horizontalAngle -= rotateSpeed;
+                        break;
+                }
+
+                // Обновить направление камеры
+                Vertex direction = new Vertex(
+                    (float)(Math.Cos(horizontalAngle) * Math.Cos(verticalAngle)),
+                    (float)Math.Sin(verticalAngle),
+                    (float)(Math.Sin(horizontalAngle) * Math.Cos(verticalAngle))
+                );
+
+                camera.SetDirection(direction);
+
+                actionTimer.Start();
+            }
+        }
+
+        private void MyForm_KeyUp(object sender, KeyEventArgs e)
+        {
+            actionTimer.Stop();
         }
 
         private void DrawPolyhedron(PolyHedron polyhedron, string plane)
@@ -221,95 +351,55 @@ namespace CG_Lab
 
         private void comboBox1_SelectedIndexChanged(object sender, EventArgs e)
         {
-            g.Clear(pictureBox1.BackColor);
-            double centerX, centerY, centerZ;
+            // g.Clear(pictureBox1.BackColor);
+            
 
             switch (comboBox1.SelectedIndex)
             {
                 case (int)RenderingOp.DrawCube:
-                    DrawPolyhedron(currentPolyhedron = PolyHedron.GetCube()
+                    currentPolyhedron = PolyHedron.GetCube().Moved(pictureBox1.Width / 2, pictureBox1.Height / 2, 0);
+                    /*DrawPolyhedron(currentPolyhedron = PolyHedron.GetCube()
                                              // .Rotated(20, 20, 0)
                                              .Scaled(100, 100, 100)
                                              .Moved(pictureBox1.Width / 2, pictureBox1.Height / 2, 0),
-                                             currPlane);
+                                             currPlane);*/
                     break;
                 case (int)RenderingOp.DrawTetrahedron:
-                    DrawPolyhedron(currentPolyhedron = PolyHedron.GetTetrahedron()
+                    currentPolyhedron = PolyHedron.GetTetrahedron().Moved(pictureBox1.Width / 2, pictureBox1.Height / 2, 0);
+                    /*DrawPolyhedron(currentPolyhedron = PolyHedron.GetTetrahedron()
                                              .Rotated(10, 10, 0)
                                              .Scaled(100, 100, 100)
                                              .Moved(pictureBox1.Width / 2, pictureBox1.Height / 2, 0),
-                                             currPlane);
+                                             currPlane);*/
                     break;
                 case (int)RenderingOp.DrawOctahedron:
-                    DrawPolyhedron(currentPolyhedron = PolyHedron.GetOctahedron()
+                    currentPolyhedron = PolyHedron.GetOctahedron().Moved(pictureBox1.Width / 2, pictureBox1.Height / 2, 0);
+                    /*DrawPolyhedron(currentPolyhedron = PolyHedron.GetOctahedron()
                                              .Rotated(20, 20, 0)
                                              .Scaled(100, 100, 100)
                                              .Moved(pictureBox1.Width / 2, pictureBox1.Height / 2, 0),
-                                             currPlane);
+                                             currPlane);*/
                     break;
                 case (int)RenderingOp.DrawIcosahedron:
-                    DrawPolyhedron(currentPolyhedron = PolyHedron.GetIcosahedron()
+                    currentPolyhedron = PolyHedron.GetIcosahedron().Moved(pictureBox1.Width / 2, pictureBox1.Height / 2, 0);
+                    /*DrawPolyhedron(currentPolyhedron = PolyHedron.GetIcosahedron()
                                              .Rotated(10, 10, 0)
                                              .Scaled(150, 150, 150)
                                              .Moved(pictureBox1.Width / 2, pictureBox1.Height / 2, 0),
-                                             currPlane);
+                                             currPlane);*/
                     break;
                 case (int)RenderingOp.DrawDodecahedron:
-                    DrawPolyhedron(currentPolyhedron = PolyHedron.GetDodecahedron()
+                    currentPolyhedron = PolyHedron.GetDodecahedron().Moved(pictureBox1.Width / 2, pictureBox1.Height / 2, 0);
+                    /*DrawPolyhedron(currentPolyhedron = PolyHedron.GetDodecahedron()
                                              .Rotated(10, 10, 0)
                                              .Scaled(200, 200, 200)
                                              .Moved(pictureBox1.Width / 2, pictureBox1.Height / 2, 0),
-                                             currPlane);
+                                             currPlane);*/
                     break;
-                case (int)RenderingOp.Func1:
-                    centerX = 0;
-                    centerY = 0;
-                    centerZ = 0;
-                    currentPolyhedron = PolyHedron.GetFunc1((float)numericX0.Value, (float)numericX1.Value,
-                        (float)numericY0.Value, (float)numericY1.Value, (float)stepNumeric.Value);
-                    currentPolyhedron.FindCenter(currentPolyhedron.Vertices, ref centerX, ref centerY, ref centerZ);
-                    currentPolyhedron = currentPolyhedron
-                        .Scaled(100, 100, 100)
-                        .Moved(pictureBox1.Width / 2 - (float)centerX, pictureBox1.Height / 2 - (float)centerY, 0);
-                    DrawPolyhedron(currentPolyhedron, currPlane);
-                    break;
-                case (int)RenderingOp.Func2:
-                    centerX = 0;
-                    centerY = 0;
-                    centerZ = 0;
-                    currentPolyhedron = PolyHedron.GetFunc2((float)numericX0.Value, (float)numericX1.Value,
-                        (float)numericY0.Value, (float)numericY1.Value, (float)stepNumeric.Value);
-                    currentPolyhedron.FindCenter(currentPolyhedron.Vertices, ref centerX, ref centerY, ref centerZ);
-                    currentPolyhedron = currentPolyhedron
-                        .Scaled(100, 100, 100)
-                        .Moved(pictureBox1.Width / 2 - (float)centerX, pictureBox1.Height / 2 - (float)centerY, 0);
-                    DrawPolyhedron(currentPolyhedron, currPlane);
-                    break;
-                case (int)RenderingOp.Func3:
-                    centerX = 0;
-                    centerY = 0;
-                    centerZ = 0;
-                    currentPolyhedron = PolyHedron.GetFunc3((float)numericX0.Value, (float)numericX1.Value,
-                        (float)numericY0.Value, (float)numericY1.Value, (float)stepNumeric.Value);
-                    currentPolyhedron.FindCenter(currentPolyhedron.Vertices, ref centerX, ref centerY, ref centerZ);
-                    currentPolyhedron = currentPolyhedron
-                        .Scaled(100, 100, 100)
-                        .Moved(pictureBox1.Width / 2 - (float)centerX, pictureBox1.Height / 2 - (float)centerY, 0);
-                    DrawPolyhedron(currentPolyhedron, currPlane);
-                    break;
-                case (int)RenderingOp.Func4:
-                    centerX = 0;
-                    centerY = 0;
-                    centerZ = 0;
-                    currentPolyhedron = PolyHedron.GetFunc4((float)numericX0.Value, (float)numericX1.Value,
-                        (float)numericY0.Value, (float)numericY1.Value, (float)stepNumeric.Value);
-                    currentPolyhedron.FindCenter(currentPolyhedron.Vertices, ref centerX, ref centerY, ref centerZ);
-                    currentPolyhedron = currentPolyhedron
-                        .Scaled(100, 100, 100)
-                        .Moved(pictureBox1.Width / 2 - (float)centerX, pictureBox1.Height / 2 - (float)centerY, 0);
-                    DrawPolyhedron(currentPolyhedron, currPlane);
-                    break;
+
             }
+
+            RenderScene();
         }
 
         private void reflectionComboBox_SelectedIndexChanged(object sender, EventArgs e)
@@ -543,7 +633,7 @@ namespace CG_Lab
         {
             if (openFileDialog1.ShowDialog() == DialogResult.OK)
             {
-                //try
+                try
                 {
                     DrawPolyhedron(currentPolyhedron = PolyHedron.LoadFromObj(openFileDialog1.FileName), currPlane);
                         //.Scaled(100, 100, 100)
@@ -551,14 +641,92 @@ namespace CG_Lab
                         //.Moved(pictureBox1.Width / 2, pictureBox1.Height / 2, 0), currPlane);
                     MessageBox.Show("Модель успешно загружена.", "Загрузка", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
-                /*catch (Exception ex)
+                catch (Exception ex)
                 {
                     MessageBox.Show($"Ошибка при загрузке файла: {ex.Message}", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }*/
+                }
             }
         }
 
+        private void comboBox1_KeyDown(object sender, KeyEventArgs e)
+        {
+            e.SuppressKeyPress = true;
+        }
+    }
 
+    public class Camera
+    {
+        public Vertex Position { get; set; } // Позиция камеры
+        public Vertex Target { get; set; }   // Точка, куда смотрит камера
+        public Vertex Up { get; set; } = new Vertex(0, -1, 0); // Вектор вверх
+        public Matrix<float> ViewMatrix => Utilities.CreateViewMatrix(Position, Target, Up);
+        public Matrix<float> ProjectionMatrix { get; set; }
+
+        public Camera(Vertex position, Vertex target, float fov, float aspectRatio, float near, float far)
+        {
+            Position = position;
+            SetDirection(new Vertex(0, 0, 1));
+            ProjectionMatrix = Utilities.CreatePerspectiveFieldOfView(fov, aspectRatio, near, far);
+        }
+
+        public void SetDirection(Vertex direction)
+        {
+            // float distance = (Target - Position).Length();
+
+            Target = Position + direction; // Сместить цель взгляда по направлению
+        }
+    }
+
+    public static class Utilities
+    {
+        public static Matrix<float> CreateViewMatrix(Vertex position, Vertex target, Vertex up)
+        {
+            // Вектор направления камеры (от камеры к цели)
+            Vertex forward = (target - position).Normalize();
+
+            // Вектор правой стороны камеры
+            Vertex right = Vertex.Cross(up, forward).Normalize();
+
+            // Новый вектор "вверх" с учётом правого и направления
+            Vertex adjustedUp = Vertex.Cross(forward, right);
+
+            // Матрица вида
+            return new float[4, 4] {
+               { right.X, adjustedUp.X, forward.X, 0 },
+               { right.Y, adjustedUp.Y, forward.Y, 0 },
+               { right.Z, adjustedUp.Z, forward.Z, 0 },
+               { -Vertex.Dot(right, position), -Vertex.Dot(adjustedUp, position), -Vertex.Dot(forward, position), 1 }
+            };
+        }
+
+        public static Matrix<float> CreatePerspectiveFieldOfView(float fov, float aspectRatio, float near, float far)
+        {
+            if (fov <= 0 || fov >= Math.PI)
+                throw new ArgumentOutOfRangeException(nameof(fov), "Field of view must be in range (0, π).");
+            if (aspectRatio <= 0)
+                throw new ArgumentOutOfRangeException(nameof(aspectRatio), "Aspect ratio must be greater than zero.");
+            if (near <= 0)
+                throw new ArgumentOutOfRangeException(nameof(near), "Near plane distance must be greater than zero.");
+            if (far <= near)
+                throw new ArgumentOutOfRangeException(nameof(far), "Far plane distance must be greater than near plane distance.");
+
+            float f = 1.0f / (float)Math.Tan(fov / 2.0f); // Cotangent of half the field of view
+
+            return new float[4, 4] {
+                { f / aspectRatio, 0, 0, 0 },
+                { 0, f, 0, 0 },
+                { 0, 0, (far + near) / (near - far), -1 },
+                { 0, 0, (2 * far * near) / (near - far), 0 }
+                /*{ f / aspectRatio, 0, 0, 0 },
+                { 0, f, 0, 0 },
+                { 0, 0, (far + near) / (near - far), (2 * far * near) / (near - far) },
+                { 0, 0, -1, 0 }*/
+                /*{ f / aspectRatio, 0, 0, 0 },
+                { 0, f, 0, 0 },
+                { 0, 0, (far) / (near - far), -1 },
+                { 0, 0, (far * near) / (near - far), 0 }*/
+            };
+        }
     }
 
     public class Matrix<T> where T : struct, IConvertible
@@ -575,10 +743,10 @@ namespace CG_Lab
             return new Matrix<T>(values);
         }
 
-        public static implicit operator Vertex(Matrix<T> m)
+        /*public static implicit operator Vertex(Matrix<T> m)
         {
             return new Vertex(Convert.ToSingle(m[0, 0]), Convert.ToSingle(m[0, 1]), Convert.ToSingle(m[0, 2]));
-        }
+        }*/
 
         public static implicit operator Normal(Matrix<T> m)
         {
@@ -704,10 +872,42 @@ namespace CG_Lab
             return new Vertex(X, Y, Z);
         }
 
+        public static implicit operator Vertex(Matrix<float> m)
+        {
+            if (m[0, 3] != 0)
+            {
+                return new Vertex(m[0, 0] / m[0, 3], m[0, 1] / m[0, 3], m[0, 2] / m[0, 3]);
+            }
+            else
+            {
+                return new Vertex(m[0, 0], m[0, 1], m[0, 2]);
+            }
+        }
+
+        public float Length()
+        {
+            return (float)Math.Sqrt(X * X + Y * Y + Z * Z);
+        }
+
         // Метод для вычитания двух векторов (вершин)
         public static Vertex Subtract(Vertex v1, Vertex v2)
         {
             return new Vertex(v1.X - v2.X, v1.Y - v2.Y, v1.Z - v2.Z);
+        }
+
+        public static Vertex operator-(Vertex v1, Vertex v2)
+        {
+            return Subtract(v1, v2);
+        }
+
+        public static Vertex operator+(Vertex v1, Vertex v2)
+        {
+            return new Vertex(v1.X + v2.X, v1.Y + v2.Y, v1.Z + v2.Z);
+        }
+
+        public static Vertex operator*(float c, Vertex v)
+        {
+            return new Vertex(c * v.X, c * v.Y, c * v.Z);
         }
 
         // Нормализация вектора
@@ -730,7 +930,7 @@ namespace CG_Lab
                 v1.Y * v2.Z - v1.Z * v2.Y,
                 v1.Z * v2.X - v1.X * v2.Z,
                 v1.X * v2.Y - v1.Y * v2.X
-            );
+            ).Normalize();
         }
 
         public float DistanceTo(in Vertex other)
