@@ -77,6 +77,10 @@
             this.saveFileDialog1 = new System.Windows.Forms.SaveFileDialog();
             this.openFileDialog1 = new System.Windows.Forms.OpenFileDialog();
             this.button2 = new System.Windows.Forms.Button();
+            this.button4 = new System.Windows.Forms.Button();
+            this.numericUpDownX = new System.Windows.Forms.NumericUpDown();
+            this.numericUpDownY = new System.Windows.Forms.NumericUpDown();
+            this.numericUpDownZ = new System.Windows.Forms.NumericUpDown();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.numericUpDown1)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.numericUpDown2)).BeginInit();
@@ -97,6 +101,9 @@
             ((System.ComponentModel.ISupportInitialize)(this.numericY1)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.numericY0)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.stepNumeric)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.numericUpDownX)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.numericUpDownY)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.numericUpDownZ)).BeginInit();
             this.SuspendLayout();
             // 
             // comboBox1
@@ -815,11 +822,66 @@
             this.button2.UseVisualStyleBackColor = true;
             this.button2.Click += new System.EventHandler(this.button2_Click);
             // 
+            // button4
+            // 
+            this.button4.Location = new System.Drawing.Point(801, 774);
+            this.button4.Name = "button4";
+            this.button4.Size = new System.Drawing.Size(157, 55);
+            this.button4.TabIndex = 40;
+            this.button4.Text = "Отсечение граней";
+            this.button4.UseVisualStyleBackColor = true;
+            this.button4.Click += new System.EventHandler(this.button4_Click);
+            // 
+            // numericUpDownX
+            // 
+            this.numericUpDownX.Location = new System.Drawing.Point(764, 745);
+            this.numericUpDownX.Minimum = new decimal(new int[] {
+            100,
+            0,
+            0,
+            -2147483648});
+            this.numericUpDownX.Name = "numericUpDownX";
+            this.numericUpDownX.Size = new System.Drawing.Size(58, 22);
+            this.numericUpDownX.TabIndex = 41;
+            // 
+            // numericUpDownY
+            // 
+            this.numericUpDownY.Location = new System.Drawing.Point(841, 745);
+            this.numericUpDownY.Minimum = new decimal(new int[] {
+            100,
+            0,
+            0,
+            -2147483648});
+            this.numericUpDownY.Name = "numericUpDownY";
+            this.numericUpDownY.Size = new System.Drawing.Size(55, 22);
+            this.numericUpDownY.TabIndex = 42;
+            // 
+            // numericUpDownZ
+            // 
+            this.numericUpDownZ.Location = new System.Drawing.Point(914, 745);
+            this.numericUpDownZ.Minimum = new decimal(new int[] {
+            100,
+            0,
+            0,
+            -2147483648});
+            this.numericUpDownZ.Name = "numericUpDownZ";
+            this.numericUpDownZ.Size = new System.Drawing.Size(59, 22);
+            this.numericUpDownZ.TabIndex = 43;
+            this.numericUpDownZ.Value = new decimal(new int[] {
+            1,
+            0,
+            0,
+            -2147483648});
+            // 
             // Form1
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 16F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(1924, 1055);
+            this.Controls.Add(this.numericUpDownZ);
+            this.Controls.Add(this.numericUpDownY);
+            this.Controls.Add(this.numericUpDownX);
+            this.Controls.Add(this.button4);
             this.Controls.Add(this.label13);
             this.Controls.Add(this.label12);
             this.Controls.Add(this.button3);
@@ -890,6 +952,9 @@
             ((System.ComponentModel.ISupportInitialize)(this.numericY1)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.numericY0)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.stepNumeric)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.numericUpDownX)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.numericUpDownY)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.numericUpDownZ)).EndInit();
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -946,6 +1011,10 @@
         private System.Windows.Forms.SaveFileDialog saveFileDialog1;
         private System.Windows.Forms.OpenFileDialog openFileDialog1;
         private System.Windows.Forms.Button button2;
+        private System.Windows.Forms.Button button4;
+        private System.Windows.Forms.NumericUpDown numericUpDownX;
+        private System.Windows.Forms.NumericUpDown numericUpDownY;
+        private System.Windows.Forms.NumericUpDown numericUpDownZ;
     }
 }
 
