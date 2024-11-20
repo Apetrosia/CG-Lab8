@@ -167,11 +167,9 @@ namespace CG_Lab
                 int minY = (int)Math.Round(Math.Min(pictureBox1.Height - 1, Math.Max(0, v.Min(vertex => vertex.Y))));
                 int maxY = (int)Math.Round(Math.Min(pictureBox1.Height - 1, Math.Max(0, v.Max(vertex => vertex.Y))));
 
-                int il = 1, ir = 1; // Начинаем с первых отрезков
+                int il = 1, ir = 1;
                 for (int i = minY; i <= maxY; i++)
                 {
-                    if (il >= leftPoints.Count || ir >= rightPoints.Count) break;
-
                     PointF leftBorder = FindIntersection(leftPoints[il - 1], leftPoints[il], new PointF(-1, i), new PointF(pictureBox1.Width + 1, i));
                     PointF rightBorder = FindIntersection(rightPoints[ir - 1], rightPoints[ir], new PointF(-1, i), new PointF(pictureBox1.Width + 1, i));
 
@@ -190,8 +188,8 @@ namespace CG_Lab
                         }
                     }
 
-                    while (il <= leftPoints.Count - 1 && i >= (int)Math.Round(leftPoints[il].Y)) il++;
-                    while (ir <= rightPoints.Count - 1 && i >= (int)Math.Round(rightPoints[ir].Y)) ir++;
+                    while (il < leftPoints.Count - 1 && i >= (int)Math.Round(leftPoints[il].Y)) il++;
+                    while (ir < rightPoints.Count - 1 && i >= (int)Math.Round(rightPoints[ir].Y)) ir++;
                 }
             }
 
@@ -717,7 +715,7 @@ namespace CG_Lab
             //profilePoints.Clear();
             //g.Clear(pictureBox1.BackColor);
             //pictureBox1.Invalidate();
-            pictureBox1.Image = clearPB;
+            pictureBox1.Image = new Bitmap(clearPB);
         }
 
         private void numericUpDownDivisions_ValueChanged(object sender, EventArgs e)
