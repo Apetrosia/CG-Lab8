@@ -160,7 +160,7 @@ namespace CG_Lab
                     if (i == 0 || i == v.Count - 1)
                         continue;
 
-                    if (GetPos(v[i], vb, vt) < 0) // слева
+                    if (GetPos(v[i], vt, vb) < 0) // слева
                     {
                             leftPoints.Add(v[i]);
                     }
