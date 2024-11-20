@@ -5,12 +5,12 @@ using System.Drawing;
 using System.Linq;
 using System.Text;
 using System.IO;
-using System.Windows.Forms;
-using System.Security.Cryptography;
-using System.Text.RegularExpressions;
+using System.Runtime.InteropServices.ComTypes;
 
 namespace CG_Lab
 {
+    public enum Projection { Perspective, Orthographic }
+
     public partial class Form1 : Form
     {
         float[,] Zbuffer;
@@ -98,13 +98,15 @@ namespace CG_Lab
             // Получаем View и Projection матрицы из камеры
             var viewMatrix = camera.ViewMatrix;
 
-            //var projectionMatrix = camera.OrthographicMatrix;
+            // var projectionMatrix = camera.OrthographicMatrix;
             var projectionMatrix = camera.ProjectionMatrix;
 
-            PolyHedron renderPoly = currentPolyhedron.Clone(); //currentPolyhedron.FilterVisibleFaces(camera.Direction);
+            //PolyHedron renderPoly = currentPolyhedron.Clone(); //currentPolyhedron.FilterVisibleFaces(camera.Direction);
+
+            PolyHedron renderPoly = currentPolyhedron.FilterVisibleFaces(camera, Projection.Perspective);
 
             // Очистка экрана
-            //pictureBox1.Image = clearPB;
+            // pictureBox1.Image = clearPB;
 
             for (int i = 0; i < renderPoly.Vertices.Count; i++)
             {
@@ -122,14 +124,14 @@ namespace CG_Lab
             for (int i = 0; i < pictureBox1.Width; i++)
                 for (int j = 0; j < pictureBox1.Height; j++)
                     Zbuffer[i, j] = float.MaxValue;
-            ZbufferDraw(renderPoly.FilterVisibleFaces(camera.Direction));
+            ZbufferDraw(renderPoly);
 
-            pictureBox1.Invalidate();
+            // pictureBox1.Invalidate();
         }
 
         private void ZbufferDraw(PolyHedron poly)
         {
-            foreach (Face face in poly.FilterVisibleFaces(camera.Direction).Faces)
+            foreach (Face face in poly.Faces)
             {
                 List<Vertex> v = face.Vertices.Select(index => poly.Vertices[index]).OrderBy(x => x.Y).ToList();
 
@@ -786,7 +788,7 @@ namespace CG_Lab
 
             // Получаем нормализованный вектор обзора
             //viewDirection = CalculateViewVector(cameraPosition);
-            DrawPolyhedron(currentPolyhedron.FilterVisibleFaces(viewDirection), currPlane);
+            // DrawPolyhedron(currentPolyhedron.FilterVisibleFaces(viewDirection), currPlane);
 
         }
     }
@@ -815,7 +817,7 @@ namespace CG_Lab
             // float distance = (Target - Position).Length();
 
             Target = Position + direction; // Сместить цель взгляда по направлению
-            Direction = new Vertex(-direction.X, -direction.Y, direction.Z);
+            Direction = new Vertex(-direction.X, -direction.Y, -direction.Z);
         }
     }
 
@@ -891,6 +893,10 @@ namespace CG_Lab
                 { 0, 2.0f / (top - bottom), 0, -(top + bottom) / (top - bottom) },
                 { 0, 0, -2.0f / (far - near), -(far + near) / (far - near) },
                 { 0, 0, 0, 1 }
+                /*{ 2.0f / (right - left), 0, 0, 0 },
+                { 0, 2.0f / (top - bottom), 0, 0 },
+                { 0, 0, -2.0f / (far - near), 0 },
+                { -(right + left) / (right - left), -(top + bottom) / (top - bottom), -(far + near) / (far - near), 1 }*/
             };
         }
 
@@ -1309,20 +1315,22 @@ namespace CG_Lab
 
             return viewVector;
         }
-        public PolyHedron FilterVisibleFaces(Vertex viewDirection)
+        public PolyHedron FilterVisibleFaces(Camera camera, Projection proj)
         {
             // Создаем новый многогранник
-            var visiblePolyhedron = new PolyHedron
-            {
-                Vertices = this.Vertices, // Используем те же вершины
-                Faces = new List<Face>()       // Фильтруем грани
-            };
+            var visiblePolyhedron = this.Clone();
+
+            visiblePolyhedron.Faces = new List<Face>();
 
             // Корректируем нормали (добавьте этот метод из предыдущего ответа)
             AdjustNormals(this);
 
             foreach (var face in this.Faces)
             {
+                Vertex center = GetFaceCenter(face);
+
+                Vertex viewDirection = (proj == Projection.Perspective) ? (camera.Position - center) : camera.Direction;
+
                 var normal = face.Normal;
                 //viewDirection = CalculateViewVector(face, visiblePolyhedron, new Vertex(0, 0, -500));
                 // Скалярное произведение нормали и вектора обзора
