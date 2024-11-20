@@ -13,6 +13,9 @@ namespace CG_Lab
 {
     public partial class Form1 : Form
     {
+        float[,] Zbuffer;
+        Bitmap zbbm;
+
         private enum RenderingOp
         {
             DrawCube = 0, DrawTetrahedron, DrawOctahedron, DrawIcosahedron, DrawDodecahedron,
@@ -44,8 +47,14 @@ namespace CG_Lab
 
             pictureBox1.Image = new Bitmap(pictureBox1.Width, pictureBox1.Height);
 
+            Zbuffer = new float[pictureBox1.Width, pictureBox1.Height];
+            for (int i = 0; i < pictureBox1.Width; i++)
+                for (int j = 0; j < pictureBox1.Height; j++)
+                    Zbuffer[i, j] = float.MaxValue;
+
             g = Graphics.FromImage(pictureBox1.Image);
             clearPB = new Bitmap(pictureBox1.Image);
+            zbbm = clearPB;
 
             camera = new Camera(
                                 position:    new Vertex(pictureBox1.Width / 2, pictureBox1.Height / 2, -10f),
@@ -89,13 +98,13 @@ namespace CG_Lab
             // Получаем View и Projection матрицы из камеры
             var viewMatrix = camera.ViewMatrix;
 
-            var projectionMatrix = camera.OrthographicMatrix;
-            //var projectionMatrix = camera.ProjectionMatrix;
+            //var projectionMatrix = camera.OrthographicMatrix;
+            var projectionMatrix = camera.ProjectionMatrix;
 
             PolyHedron renderPoly = currentPolyhedron.Clone(); //currentPolyhedron.FilterVisibleFaces(camera.Direction);
 
             // Очистка экрана
-            pictureBox1.Image = clearPB;
+            //pictureBox1.Image = clearPB;
 
             for (int i = 0; i < renderPoly.Vertices.Count; i++)
             {
@@ -108,21 +117,110 @@ namespace CG_Lab
                     renderPoly.Vertices[i].Z);
             }
 
-            foreach (Face face in renderPoly.FilterVisibleFaces(camera.Direction).Faces)
-            {
-                // Z-буфер
-
-                // Отрисовываем грани
-                for (int i = 1; i < face.Vertices.Count(); i++)
-                    DrawLineVu(pictureBox1, Color.Black, new PointF(renderPoly.Vertices[face.Vertices[i - 1]].X, renderPoly.Vertices[face.Vertices[i - 1]].Y),
-                        new PointF(renderPoly.Vertices[face.Vertices[i]].X, renderPoly.Vertices[face.Vertices[i]].Y));
-                DrawLineVu(pictureBox1, Color.Black, new PointF(renderPoly.Vertices[face.Vertices[face.Vertices.Count() - 1]].X, renderPoly.Vertices[face.Vertices[face.Vertices.Count() - 1]].Y),
-                        new PointF(renderPoly.Vertices[face.Vertices[0]].X, renderPoly.Vertices[face.Vertices[0]].Y));
-            }
+            // Z-буфер
+            zbbm = clearPB;
+            for (int i = 0; i < pictureBox1.Width; i++)
+                for (int j = 0; j < pictureBox1.Height; j++)
+                    Zbuffer[i, j] = float.MaxValue;
+            ZbufferDraw(renderPoly.FilterVisibleFaces(camera.Direction));
 
             pictureBox1.Invalidate();
         }
 
+        private void ZbufferDraw(PolyHedron poly)
+        {
+            foreach (Face face in poly.FilterVisibleFaces(camera.Direction).Faces)
+            {
+                List<Vertex> v = face.Vertices.Select(index => poly.Vertices[index]).OrderBy(x => x.Y).ToList();
+
+                // Определяем минимальные и максимальные координаты
+                float minX = Math.Min(pictureBox1.Width - 1, Math.Max(0, v.Min(vertex => vertex.X)));
+                float maxX = Math.Min(pictureBox1.Width - 1, Math.Max(0, v.Max(vertex => vertex.X)));
+                float midX = (minX + maxX) / 2;
+
+                //List<Vertex> leftPoints = v.Where(vertex => vertex.X <= midX).OrderBy(vertex => vertex.Y).ToList();
+                //List<Vertex> rightPoints = v.Where(vertex => vertex.X > midX).OrderBy(vertex => vertex.Y).ToList();
+
+                List<Vertex> leftPoints = new List<Vertex>();
+                List<Vertex> rightPoints = new List<Vertex>();
+
+                for (int i = 0; i < v.Count; i++)
+                {
+                    if (i == 0 && v[i].Y != v[i + 1].Y)
+                    {
+                        leftPoints.Add(v[i]);
+                        rightPoints.Add(v[i]);
+                        continue;
+                    }
+                    else if (i == v.Count - 1 && v[v.Count - 1].Y != v[v.Count - 2].Y)
+                    {
+                        leftPoints.Add(v[i]);
+                        rightPoints.Add(v[i]);
+                        continue;
+                    }
+                    if (v[i].X < midX)
+                        leftPoints.Add(v[i]);
+                    else
+                        rightPoints.Add(v[i]);
+                }
+
+                int minY = (int)Math.Round(Math.Min(pictureBox1.Height - 1, Math.Max(0, v.Min(vertex => vertex.Y))));
+                int maxY = (int)Math.Round(Math.Min(pictureBox1.Height - 1, Math.Max(0, v.Max(vertex => vertex.Y))));
+
+                int il = 1, ir = 1; // Начинаем с первых отрезков
+                for (int i = minY; i <= maxY; i++)
+                {
+                    if (il >= leftPoints.Count || ir >= rightPoints.Count) break;
+
+                    PointF leftBorder = FindIntersection(leftPoints[il - 1], leftPoints[il], new PointF(-1, i), new PointF(pictureBox1.Width + 1, i));
+                    PointF rightBorder = FindIntersection(rightPoints[ir - 1], rightPoints[ir], new PointF(-1, i), new PointF(pictureBox1.Width + 1, i));
+
+                    for (int j = (int)Math.Round(leftBorder.X); j <= (int)Math.Round(rightBorder.X); j++)
+                    {
+                        if (j < 0 || j >= pictureBox1.Width || i < 0 || i >= pictureBox1.Height) continue;
+
+                        float z = InterpolateZ(v[0], v[1], v[2], new PointF(j, i));
+                        if (z < Zbuffer[j, i])
+                        {
+                            Zbuffer[j, i] = z;
+                            if (j == (int)Math.Round(leftBorder.X) || j == (int)Math.Round(rightBorder.X) || i == minY || i == maxY)
+                                zbbm.SetPixel(j, i, Color.Black);
+                            else
+                                zbbm.SetPixel(j, i, Color.Azure);
+                        }
+                    }
+
+                    while (il <= leftPoints.Count - 1 && i >= (int)Math.Round(leftPoints[il].Y)) il++;
+                    while (ir <= rightPoints.Count - 1 && i >= (int)Math.Round(rightPoints[ir].Y)) ir++;
+                }
+            }
+
+            pictureBox1.Image = zbbm;
+        }
+
+        private float InterpolateZ(Vertex p1, Vertex p2, Vertex p3, PointF p4)
+        {
+            float A = (p2.Y - p1.Y) * (p3.Z - p1.Z) - (p2.Z - p1.Z) * (p3.Y - p1.Y);
+            float B = (p2.Z - p1.Z) * (p3.X - p1.X) - (p2.X - p1.X) * (p3.Z - p1.Z);
+            float C = (p2.X - p1.X) * (p3.Y - p1.Y) - (p2.Y - p1.Y) * (p3.X - p1.X);
+            float D = -(A * p1.X + B * p1.Y + C * p1.Z);
+
+            return -(A * p4.X + B * p4.Y + D) / C; ;
+        }
+
+        private PointF FindIntersection(Vertex p1, Vertex p2, PointF p3, PointF p4)
+        {
+            float A1 = p2.Y - p1.Y;
+            float B1 = p1.X - p2.X;
+            float C1 = p2.X * p1.Y - p1.X * p2.Y;
+            float A2 = p4.Y - p3.Y;
+            float B2 = p3.X - p4.X;
+            float C2 = p4.X * p3.Y - p3.X * p4.Y;
+
+            float det = A1 * B2 - A2 * B1;
+
+            return new PointF((B1 * C2 - B2 * C1) / det, (A2 * C1 - A1 * C2) / det);
+        }
 
         private void MainForm_KeyDown(object sender, KeyEventArgs e)
         {
@@ -615,7 +713,7 @@ namespace CG_Lab
 
         private void button3_Click(object sender, EventArgs e)
         {
-            profilePoints.Clear();
+            //profilePoints.Clear();
             //g.Clear(pictureBox1.BackColor);
             //pictureBox1.Invalidate();
             pictureBox1.Image = clearPB;
