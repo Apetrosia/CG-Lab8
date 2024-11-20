@@ -35,11 +35,11 @@ namespace CG_Lab
         PolyHedron currentPolyhedron;
         private List<Vertex> profilePoints = new List<Vertex>();
 
-        Camera camera;
+        public Camera camera;
 
         private Timer actionTimer;
 
-        Vertex viewDirection = new Vertex(0, 0, -1);
+        //Vertex viewDirection = new Vertex(0, 0, -1);
 
         public Form1()
         {
@@ -98,8 +98,8 @@ namespace CG_Lab
             // Получаем View и Projection матрицы из камеры
             var viewMatrix = camera.ViewMatrix;
 
-            //var projectionMatrix = camera.OrthographicMatrix;
-            var projectionMatrix = camera.ProjectionMatrix;
+            var projectionMatrix = camera.OrthographicMatrix;
+            //var projectionMatrix = camera.ProjectionMatrix;
 
             PolyHedron renderPoly = currentPolyhedron.Clone(); //currentPolyhedron.FilterVisibleFaces(camera.Direction);
 
@@ -118,11 +118,11 @@ namespace CG_Lab
             }
 
             // Z-буфер
-            zbbm = clearPB;
+            zbbm = new Bitmap(clearPB);
             for (int i = 0; i < pictureBox1.Width; i++)
                 for (int j = 0; j < pictureBox1.Height; j++)
                     Zbuffer[i, j] = float.MaxValue;
-            ZbufferDraw(renderPoly.FilterVisibleFaces(camera.Direction));
+            ZbufferDraw(renderPoly.FilterVisibleFaces(camera.Direction).Scaled(0.5f, 0.5f, 0.5f));
 
             pictureBox1.Invalidate();
         }
@@ -197,6 +197,7 @@ namespace CG_Lab
 
             pictureBox1.Image = zbbm;
         }
+
 
         private float InterpolateZ(Vertex p1, Vertex p2, Vertex p3, PointF p4)
         {
@@ -777,7 +778,7 @@ namespace CG_Lab
             e.SuppressKeyPress = true;
         }
 
-        private void button4_Click(object sender, EventArgs e)
+        /*private void button4_Click(object sender, EventArgs e)
         {
 
             //viewDirection = new Vertex(0, 0, 1); // Ортографическая проекция
@@ -790,7 +791,7 @@ namespace CG_Lab
             //viewDirection = CalculateViewVector(cameraPosition);
             DrawPolyhedron(currentPolyhedron.FilterVisibleFaces(viewDirection), currPlane);
 
-        }
+        }*/
     }
 
     public class Camera
@@ -1311,12 +1312,13 @@ namespace CG_Lab
 
             return viewVector;
         }
-        public PolyHedron FilterVisibleFaces(Vertex viewDirection)
+        public PolyHedron FilterVisibleFaces(Vertex viewDirection/*, Camera camera*/)
         {
             // Создаем новый многогранник
             var visiblePolyhedron = new PolyHedron
             {
                 Vertices = this.Vertices, // Используем те же вершины
+                //Vertices = new List<Vertex>(),
                 Faces = new List<Face>()       // Фильтруем грани
             };
 
@@ -1326,7 +1328,10 @@ namespace CG_Lab
             foreach (var face in this.Faces)
             {
                 var normal = face.Normal;
-                //viewDirection = CalculateViewVector(face, visiblePolyhedron, new Vertex(0, 0, -500));
+
+                //для перспективной
+                //viewDirection = Vertex.Subtract(camera, Vertex.GetFaceCentroid(face, visiblePolyhedron.Vertices));
+
                 // Скалярное произведение нормали и вектора обзора
                 float dotProduct = Vertex.Dot(normal, viewDirection);
 
@@ -1334,6 +1339,11 @@ namespace CG_Lab
                 if (dotProduct > 0)
                 {
                     visiblePolyhedron.Faces.Add(face);
+                    /*foreach (int ind in face.Vertices)
+                    {
+                        visiblePolyhedron.Vertices.Add(this.Vertices[ind]);
+                    }*/
+                    
                 }
             }
 

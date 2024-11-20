@@ -69,7 +69,7 @@
             this.saveFileDialog1 = new System.Windows.Forms.SaveFileDialog();
             this.openFileDialog1 = new System.Windows.Forms.OpenFileDialog();
             this.button2 = new System.Windows.Forms.Button();
-            this.button4 = new System.Windows.Forms.Button();
+            //this.button4 = new System.Windows.Forms.Button();
             this.numericUpDownX = new System.Windows.Forms.NumericUpDown();
             this.numericUpDownY = new System.Windows.Forms.NumericUpDown();
             this.numericUpDownZ = new System.Windows.Forms.NumericUpDown();
@@ -661,14 +661,14 @@
             // 
             // button4
             // 
-            this.button4.Location = new System.Drawing.Point(1202, 1191);
+            /*this.button4.Location = new System.Drawing.Point(1202, 1191);
             this.button4.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.button4.Name = "button4";
             this.button4.Size = new System.Drawing.Size(236, 85);
             this.button4.TabIndex = 40;
             this.button4.Text = "Отсечение граней";
-            this.button4.UseVisualStyleBackColor = true;
-            this.button4.Click += new System.EventHandler(this.button4_Click);
+            this.button4.UseVisualStyleBackColor = true;*/
+            //this.button4.Click += new System.EventHandler(this.button4_Click);
             // 
             // numericUpDownX
             // 
@@ -722,7 +722,7 @@
             this.Controls.Add(this.numericUpDownZ);
             this.Controls.Add(this.numericUpDownY);
             this.Controls.Add(this.numericUpDownX);
-            this.Controls.Add(this.button4);
+            //this.Controls.Add(this.button4);
             this.Controls.Add(this.label13);
             this.Controls.Add(this.label12);
             this.Controls.Add(this.button3);
