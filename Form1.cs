@@ -160,7 +160,7 @@ namespace CG_Lab
                     if (i == 0 || i == v.Count - 1)
                         continue;
 
-                    if (GetPos(v[i], vt, vb) < 0) // слева
+                    if (GetPos(v[i], vt, vb) < 0) 
                     {
                             leftPoints.Add(v[i]);
                     }
@@ -171,30 +171,8 @@ namespace CG_Lab
                 leftPoints.Add(vt);
                 rightPoints.Add(vt);
 
-                /*
-                for (int i = 0; i < v.Count; i++)
-                {
-                    if (i == 0 && v[i].Y != v[i + 1].Y)
-                    {
-                        leftPoints.Add(v[i]);
-                        rightPoints.Add(v[i]);
-                        continue;
-                    }
-                    else if (i == v.Count - 1 && v[v.Count - 1].Y != v[v.Count - 2].Y)
-                    {
-                        leftPoints.Add(v[i]);
-                        rightPoints.Add(v[i]);
-                        continue;
-                    }
-                    if (v[i].X < midX)
-                        leftPoints.Add(v[i]);
-                    else
-                        rightPoints.Add(v[i]);
-                }
-                */
-
-                int minY = (int)Math.Round(Math.Min(pictureBox1.Height - 1, Math.Max(0, v.Min(vertex => vertex.Y))));
-                int maxY = (int)Math.Round(Math.Min(pictureBox1.Height - 1, Math.Max(0, v.Max(vertex => vertex.Y))));
+                int minY = (int)Math.Round(v.Min(vertex => vertex.Y));
+                int maxY = (int)Math.Round(v.Max(vertex => vertex.Y));
 
                 int il = 1, ir = 1;
                 while (il < leftPoints.Count - 1 && (int)Math.Round(leftPoints[il].Y) == (int)Math.Round(leftPoints[il - 1].Y)) il++;
