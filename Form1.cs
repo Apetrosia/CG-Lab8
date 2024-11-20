@@ -8,6 +8,7 @@ using System.IO;
 using System.Windows.Forms;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
+using System.Reflection;
 
 namespace CG_Lab
 {
@@ -136,7 +137,9 @@ namespace CG_Lab
                 // Определяем минимальные и максимальные координаты
                 float minX = Math.Min(pictureBox1.Width - 1, Math.Max(0, v.Min(vertex => vertex.X)));
                 float maxX = Math.Min(pictureBox1.Width - 1, Math.Max(0, v.Max(vertex => vertex.X)));
-                float midX = (minX + maxX) / 2;
+                //float midX = (minX + maxX) / 2;
+                Vertex vb = v[0];
+                Vertex vt = v[v.Count - 1];
 
                 //List<Vertex> leftPoints = v.Where(vertex => vertex.X <= midX).OrderBy(vertex => vertex.Y).ToList();
                 //List<Vertex> rightPoints = v.Where(vertex => vertex.X > midX).OrderBy(vertex => vertex.Y).ToList();
@@ -144,6 +147,26 @@ namespace CG_Lab
                 List<Vertex> leftPoints = new List<Vertex>();
                 List<Vertex> rightPoints = new List<Vertex>();
 
+                leftPoints.Add(vb);
+                rightPoints.Add(vb);
+
+                for (int i = 0; i < v.Count; i++)
+                {
+                    if (i == 0 || i == v.Count - 1)
+                        continue;
+
+                    if (GetPos(v[i], vb, vt) < 0) // слева
+                    {
+                            leftPoints.Add(v[i]);
+                    }
+                    else
+                        rightPoints.Add(v[i]);
+                }
+
+                leftPoints.Add(vt);
+                rightPoints.Add(vt);
+
+                /*
                 for (int i = 0; i < v.Count; i++)
                 {
                     if (i == 0 && v[i].Y != v[i + 1].Y)
@@ -163,11 +186,14 @@ namespace CG_Lab
                     else
                         rightPoints.Add(v[i]);
                 }
+                */
 
                 int minY = (int)Math.Round(Math.Min(pictureBox1.Height - 1, Math.Max(0, v.Min(vertex => vertex.Y))));
                 int maxY = (int)Math.Round(Math.Min(pictureBox1.Height - 1, Math.Max(0, v.Max(vertex => vertex.Y))));
 
                 int il = 1, ir = 1;
+                while (il < leftPoints.Count - 1 && (int)Math.Round(leftPoints[il].Y) == (int)Math.Round(leftPoints[il - 1].Y)) il++;
+                while (ir < rightPoints.Count - 1 && (int)Math.Round(rightPoints[ir].Y) == (int)Math.Round(rightPoints[ir - 1].Y)) ir++;
                 for (int i = minY; i <= maxY; i++)
                 {
                     PointF leftBorder = FindIntersection(leftPoints[il - 1], leftPoints[il], new PointF(-1, i), new PointF(pictureBox1.Width + 1, i));
@@ -178,7 +204,7 @@ namespace CG_Lab
                         if (j < 0 || j >= pictureBox1.Width || i < 0 || i >= pictureBox1.Height) continue;
 
                         float z = InterpolateZ(v[0], v[1], v[2], new PointF(j, i));
-                        if (z < Zbuffer[j, i])
+                        if (z > 0 && z < Zbuffer[j, i])
                         {
                             Zbuffer[j, i] = z;
                             if (j == (int)Math.Round(leftBorder.X) || j == (int)Math.Round(rightBorder.X) || i == minY || i == maxY)
@@ -188,22 +214,33 @@ namespace CG_Lab
                         }
                     }
 
-                    while (il < leftPoints.Count - 1 && i >= (int)Math.Round(leftPoints[il].Y)) il++;
-                    while (ir < rightPoints.Count - 1 && i >= (int)Math.Round(rightPoints[ir].Y)) ir++;
+                    while (il < leftPoints.Count - 1 && i == (int)Math.Round(leftPoints[il].Y)) il++;
+                    while (ir < rightPoints.Count - 1 && i == (int)Math.Round(rightPoints[ir].Y)) ir++;
                 }
             }
 
             pictureBox1.Image = zbbm;
         }
 
+        private float GetPos(Vertex point, Vertex start, Vertex end)
+        {
+            return (point.Y - start.Y) * (end.X - start.X) - (point.X - start.X) * (end.Y - start.Y);
+        }
+
         private float InterpolateZ(Vertex p1, Vertex p2, Vertex p3, PointF p4)
         {
+            float A = p1.Y * (p2.Z - p3.Z) + p2.Y * (p3.Z - p1.Z) + p3.Y * (p1.Z - p2.Z);
+            float B = p1.Z * (p2.X - p3.X) + p2.Z * (p3.X - p1.X) + p3.Z * (p1.X - p2.X);
+            float C = p1.X * (p2.Y - p3.Y) + p2.X * (p3.Y - p1.Y) + p3.X * (p1.Y - p2.Y);
+            float D = - (p1.X * (p2.Y * p3.Z - p3.Y * p2.Z) + p2.X * (p3.Y * p1.Z - p1.Y * p3.Z) + p3.X * (p1.Y * p2.Z - p2.Y * p1.Z));
+            /*
             float A = (p2.Y - p1.Y) * (p3.Z - p1.Z) - (p2.Z - p1.Z) * (p3.Y - p1.Y);
             float B = (p2.Z - p1.Z) * (p3.X - p1.X) - (p2.X - p1.X) * (p3.Z - p1.Z);
             float C = (p2.X - p1.X) * (p3.Y - p1.Y) - (p2.Y - p1.Y) * (p3.X - p1.X);
             float D = -(A * p1.X + B * p1.Y + C * p1.Z);
+            */
 
-            return -(A * p4.X + B * p4.Y + D) / C; ;
+            return -(A * p4.X + B * p4.Y + D) / C;
         }
 
         private PointF FindIntersection(Vertex p1, Vertex p2, PointF p3, PointF p4)
@@ -211,6 +248,7 @@ namespace CG_Lab
             float A1 = p2.Y - p1.Y;
             float B1 = p1.X - p2.X;
             float C1 = p2.X * p1.Y - p1.X * p2.Y;
+
             float A2 = p4.Y - p3.Y;
             float B2 = p3.X - p4.X;
             float C2 = p4.X * p3.Y - p3.X * p4.Y;
