@@ -22,7 +22,7 @@ namespace CG_Lab
 
         private enum RenderingOp
         {
-            DrawCube = 0, DrawTetrahedron, DrawOctahedron, DrawIcosahedron, DrawDodecahedron,
+            DrawTetrahedron = 0, DrawOctahedron, DrawIcosahedron, DrawDodecahedron,
             Func1, Func2, Func3, Func4
         }
 
@@ -71,10 +71,6 @@ namespace CG_Lab
 
             currentPolyhedron = PolyHedron.GetCube().Moved(pictureBox1.Width / 2, pictureBox1.Height / 2, 0);
 
-            reflectionComboBox.Items.Add("Отображение на XY");
-            reflectionComboBox.Items.Add("Отображение на YZ");
-            reflectionComboBox.Items.Add("Отображение на XZ");
-
             comboBox1.SelectedIndex = 0;
 
             System.Threading.Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
@@ -102,12 +98,26 @@ namespace CG_Lab
             // Получаем View и Projection матрицы из камеры
             var viewMatrix = camera.ViewMatrix;
 
-            // var projectionMatrix = camera.OrthographicMatrix;
-            var projectionMatrix = camera.ProjectionMatrix;
+            Projection proj = projectionListBox.SelectedIndex == 0 ? Projection.Perspective : Projection.Orthographic;
+
+            Matrix<float> projectionMatrix;
+
+            PolyHedron renderPoly;
+
+            if (proj == Projection.Perspective)
+            {
+                projectionMatrix = camera.ProjectionMatrix;
+                renderPoly = currentPolyhedron.FilterVisibleFaces(camera, proj);
+            }
+            else
+            {
+                projectionMatrix = camera.OrthographicMatrix;
+                renderPoly = currentPolyhedron.ScaledAroundCenter(1 / 10f, 1 /10f, 1 / 10f).FilterVisibleFaces(camera, proj);
+            }
 
             //PolyHedron renderPoly = currentPolyhedron.Clone(); //currentPolyhedron.FilterVisibleFaces(camera.Direction);
 
-            PolyHedron renderPoly = currentPolyhedron.FilterVisibleFaces(camera, Projection.Perspective);
+            
 
             // Очистка экрана
             // pictureBox1.Image = clearPB;
@@ -116,11 +126,12 @@ namespace CG_Lab
             {
                 // Преобразование в пространстве камеры
                 renderPoly.Vertices[i] *= viewMatrix;
+                float z = renderPoly.Vertices[i].Z;
                 renderPoly.Vertices[i] *= projectionMatrix;
 
                 renderPoly.Vertices[i] = new Vertex((renderPoly.Vertices[i].X + 1) * pictureBox1.Width / 2,
                     (1 - renderPoly.Vertices[i].Y) * pictureBox1.Height / 2,
-                    renderPoly.Vertices[i].Z);
+                    z);
             }
 
             // Z-буфер
@@ -187,12 +198,12 @@ namespace CG_Lab
                         if (j < 0 || j >= pictureBox1.Width || i < 0 || i >= pictureBox1.Height) continue;
 
                         float z = InterpolateZ(v[0], v[1], v[2], new PointF(j, i));
-                        if (z > 0 && z < Zbuffer[j, i])
+                        if (z < Zbuffer[j, i])
                         {
                             Zbuffer[j, i] = z;
-                            if (j == (int)Math.Round(leftBorder.X) || j == (int)Math.Round(rightBorder.X) || i == minY || i == maxY)
-                                zbbm.SetPixel(j, i, Color.Black);
-                            else
+                            //if (j == (int)Math.Round(leftBorder.X) || j == (int)Math.Round(rightBorder.X) || i == minY || i == maxY)
+                                //zbbm.SetPixel(j, i, Color.Black);
+                            //else
                                 zbbm.SetPixel(j, i, Color.Azure);
                         }
                     }
@@ -210,6 +221,10 @@ namespace CG_Lab
             return (point.Y - start.Y) * (end.X - start.X) - (point.X - start.X) * (end.Y - start.Y);
         }
 
+        private float Distance(Vertex v1, Vertex v2)
+        {
+            return (float)Math.Sqrt(Math.Pow(v1.X - v2.X, 2) + Math.Pow(v1.Y - v2.Y, 2) + Math.Pow(v1.Z - v2.Z, 2));
+        }
         private float InterpolateZ(Vertex p1, Vertex p2, Vertex p3, PointF p4)
         {
             float A = p1.Y * (p2.Z - p3.Z) + p2.Y * (p3.Z - p1.Z) + p3.Y * (p1.Z - p2.Z);
@@ -247,7 +262,7 @@ namespace CG_Lab
         }
 
         private float moveSpeed = 0.2f;
-        private float rotateSpeed = 0.03f;
+        private float rotateSpeed = 0.01f;
         private float horizontalAngle = (float)Math.PI / 2;
         private float verticalAngle = 0f;
 
@@ -476,14 +491,15 @@ namespace CG_Lab
 
             switch (comboBox1.SelectedIndex)
             {
-                case (int)RenderingOp.DrawCube:
-                    currentPolyhedron = PolyHedron.GetCube().Moved(pictureBox1.Width / 2, pictureBox1.Height / 2, 0);
+                //case (int)RenderingOp.DrawCube:
+                    //currentPolyhedron = PolyHedron.LoadFromObj("C:/КГ/CG-Lab8/cube.obj").Moved(pictureBox1.Width / 2, pictureBox1.Height / 2, 0);
+                    //currentPolyhedron = PolyHedron.GetCube().Moved(pictureBox1.Width / 2, pictureBox1.Height / 2, 0);
                     /*DrawPolyhedron(currentPolyhedron = PolyHedron.GetCube()
                                              // .Rotated(20, 20, 0)
                                              .Scaled(100, 100, 100)
                                              .Moved(pictureBox1.Width / 2, pictureBox1.Height / 2, 0),
                                              currPlane);*/
-                    break;
+                    // break;
                 case (int)RenderingOp.DrawTetrahedron:
                     currentPolyhedron = PolyHedron.GetTetrahedron().Moved(pictureBox1.Width / 2, pictureBox1.Height / 2, 0);
                     /*DrawPolyhedron(currentPolyhedron = PolyHedron.GetTetrahedron()
@@ -524,7 +540,7 @@ namespace CG_Lab
 
         private void reflectionComboBox_SelectedIndexChanged(object sender, EventArgs e)
         {
-            numericScale.Value = 1;
+            /*numericScale.Value = 1;
             g.Clear(pictureBox1.BackColor);
 
             switch (reflectionComboBox.SelectedIndex)
@@ -550,7 +566,7 @@ namespace CG_Lab
                         .Moved(pictureBox1.Width / 2, pictureBox1.Height / 2, 0);
                     DrawPolyhedron(currentPolyhedron, "XZ");
                     break;
-            }
+            }*/
         }
 
         private void pictureBox1_MouseClick(object sender, MouseEventArgs e)
@@ -702,8 +718,8 @@ namespace CG_Lab
 
         private void projectionListBox_SelectedIndexChanged(object sender, EventArgs e)
         {
-            g.Clear(pictureBox1.BackColor);
-            DrawPolyhedron(currentPolyhedron, currPlane);
+            
+            RenderScene();
         }
 
 
@@ -1313,7 +1329,7 @@ namespace CG_Lab
                 // Если нормаль направлена внутрь, инвертируем её
                 if (dotProduct < 0)
                 {
-                    normal = new Vertex(-normal.X, -normal.Y, -normal.Z);
+                    //normal = new Vertex(-normal.X, -normal.Y, -normal.Z);
                 }
 
                 // Сохраняем нормаль
@@ -1709,10 +1725,10 @@ namespace CG_Lab
 
             cube.Faces.Add(new Face(0, 3, 2, 1)); // Нижняя грань
             cube.Faces.Add(new Face(4, 7, 6, 5)); // Верхняя грань
-            cube.Faces.Add(new Face(0, 4, 5, 1)); // Передняя грань
-            cube.Faces.Add(new Face(3, 7, 6, 2)); // Задняя грань
-            cube.Faces.Add(new Face(1, 5, 6, 2)); // Правая грань
-            cube.Faces.Add(new Face(0, 3, 7, 4)); // Левая грань
+            cube.Faces.Add(new Face(0, 1, 5, 4)); // Передняя грань
+            cube.Faces.Add(new Face(3, 2, 6, 7)); // Задняя грань
+            cube.Faces.Add(new Face(1, 2, 6, 5)); // Правая грань
+            cube.Faces.Add(new Face(0, 4, 7, 3)); // Левая грань
 
             CalculateNormals(cube);
 
@@ -1788,9 +1804,9 @@ namespace CG_Lab
             tetra.Vertices.Add(new Vertex(-1, -1, 1));
 
             tetra.Faces.Add(new Face(2, 1, 0));
-            tetra.Faces.Add(new Face(3, 1, 0));
+            tetra.Faces.Add(new Face(0, 1, 3));
             tetra.Faces.Add(new Face(3, 2, 0));
-            tetra.Faces.Add(new Face(3, 2, 1));
+            tetra.Faces.Add(new Face(1, 2, 3));
 
             CalculateNormals(tetra);
 
